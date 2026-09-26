@@ -1,7 +1,37 @@
-# Environment variables
-.env
-.env.*
-
-# Virtual environment
-.venv/
+# Entornos virtuales
 venv/
+env/
+.venv/
+ENV/
+
+# Variables de entorno y secretos
+.env
+.env.local
+
+# Cache de Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+*.egg
+
+# Bases de datos locales
+*.sqlite3
+
+# Herramientas y editores
+.vscode/
+.idea/
+*.swp
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
+
+# Tests y cobertura
+.pytest_cache/
+htmlcov/
+.coverage
+
+# Logs
+*.log
