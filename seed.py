@@ -1,5 +1,4 @@
 import os
-from database import SessionLocal
 from models import Rol, User
 from security import hash_password
 
