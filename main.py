@@ -48,9 +48,10 @@ def login(usuario: LoginRequest, request:Request, response: Response, db: Sessio
 
     exito=False
     usuario_normalizado=usuario.email.lower()
+    ahora = datetime.now(timezone.utc)
 
     intentos_fallidos=db.query(LoginAttempt).filter(LoginAttempt.email==usuario_normalizado,
-        LoginAttempt.created_at>(datetime.now(timezone.utc)-timedelta(minutes=15)),
+        LoginAttempt.created_at>(ahora-timedelta(minutes=15)),
         LoginAttempt.is_success==False).count()
 
     if intentos_fallidos<5:
@@ -59,16 +60,15 @@ def login(usuario: LoginRequest, request:Request, response: Response, db: Sessio
             if verificar_password(usuario.password, usuario_existente.password):
                 exito=True
     
-    ahora = datetime.now(timezone.utc)
+
+    if intentos_fallidos>=5:
+        raise HTTPException(status_code=429,detail="Demasiados intentos fallidos. Intenta más tarde")
 
     #guardar el intento exito o fallido a la tabla LoginAttempt
     nuevo_login_attempt=LoginAttempt(email=usuario_normalizado, ip=request.client.host, is_success=exito, 
     created_at=ahora)
     db.add(nuevo_login_attempt)
     db.commit()
-
-    if intentos_fallidos>=5:
-        raise HTTPException(status_code=429,detail="Demasiados intentos fallidos. Intenta más tarde")
 
     if not exito:
         raise HTTPException(status_code=401, detail= "Usuario o contrase;a invalidos")
@@ -129,7 +129,8 @@ def get_usuario_actual(request: Request, db: Session = Depends(get_db),
         else:  
             raise HTTPException(status_code=401, detail="No autenticado. Credenciales no proporcionadas")
 
-def validar_csrf(request:Request, db: Session=Depends(get_db)):
+def validar_csrf(request:Request, db: Session=Depends(get_db),
+             x_csrf_token: str | None = Header(None, alias="X-CSRF-Token")):
     cookie=request.cookies.get("session_id")
     if not cookie:
         if request.headers.get("Authorization"):
@@ -138,8 +139,7 @@ def validar_csrf(request:Request, db: Session=Depends(get_db)):
     if cookie: 
         sesion_cookie=db.query(UserSession).filter(UserSession.id==cookie).first()
         if sesion_cookie:
-            header_csrf_token=request.headers.get("X-CSRF-Token")
-            if sesion_cookie.csrf_token==header_csrf_token:
+            if sesion_cookie.csrf_token==x_csrf_token:
                 return 
             else:
                 raise HTTPException(status_code=403, detail="Token csrf es invalido")
@@ -151,7 +151,7 @@ def prueba(usuario: User = Depends(get_usuario_actual)):
     return {"id": usuario.id, "email": usuario.email}
 
 @app.post("/logout")
-def logout(request:Request, response: Response, x_csrf_token: str = Header(None), db: Session=Depends(get_db), _: None = Depends(validar_csrf)):
+def logout(request:Request, response: Response, db: Session=Depends(get_db), _: None = Depends(validar_csrf)):
     cookie=request.cookies.get("session_id")
     if not cookie:
         # sesión JWT: no hay nada que cerrar en el servidor
