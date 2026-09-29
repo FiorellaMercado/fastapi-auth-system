@@ -22,9 +22,6 @@ class UserCreate(BaseModel):
             raise ValueError("Solo se permiten letras, espacios, guiones y apóstrofes")
         return value
 
-        return value.strip()
-
-
 
 class UserResponse(BaseModel):
     id: int
