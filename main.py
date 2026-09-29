@@ -7,6 +7,7 @@ from schemas import UserCreate, UserResponse, LoginRequest, LoginAttemptResponse
 from security import hash_password, verificar_password, descifrar_dato,generar_csrf_token,verificar_jwt, generar_session_id, cifrar_dato, crear_jwt
 from sqlalchemy.exc import IntegrityError
 from datetime import datetime, timezone, timedelta
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 app = FastAPI()
 
@@ -88,14 +89,12 @@ def login(usuario: LoginRequest, request:Request, response: Response, db: Sessio
         raise HTTPException(status_code=422, detail="Modo de autenticacion invalido")
 
 
+security_scheme = HTTPBearer(auto_error=False)
 
-
-def get_usuario_actual(request: Request, db: Session = Depends(get_db)):
-    # acá va toda la lógica que repasamos:
-    # 1. revisar si hay cookie
+def get_usuario_actual(request: Request, db: Session = Depends(get_db),
+    credenciales: HTTPAuthorizationCredentials = Depends(security_scheme)):
     cookie=request.cookies.get("session_id")
     if cookie:
-    # 2. si hay, validar sesión y devolver el usuario
         user_session=db.query(UserSession).filter(UserSession.id==cookie).first()
         if user_session and (datetime.now(timezone.utc) <  user_session.expires_at):
             usuario=db.query(User).filter(User.id==user_session.user_id).first()
@@ -104,11 +103,11 @@ def get_usuario_actual(request: Request, db: Session = Depends(get_db)):
             raise HTTPException(status_code=401, detail="Cookie invalida")
 
     else:
-        autorizacion=request.headers.get("Authorization")
-        # 3. si no hay cookie, revisar el header Authorization
-        if autorizacion:
-   # 4. si hay, validar el JWT y devolver el usuario
-            token=autorizacion.replace('Bearer ','')
+        #autorizacion=request.headers.get("Authorization")
+        #if autorizacion:
+        if credenciales:
+            token = credenciales.credentials
+            #token=autorizacion.replace('Bearer ','')
             try:
                 payload=verificar_jwt(token)
                 usuario_jwt=db.query(User).filter(User.email == descifrar_dato(payload['email'])).first()
@@ -119,9 +118,35 @@ def get_usuario_actual(request: Request, db: Session = Depends(get_db)):
             except Exception:
                 raise HTTPException(status_code=401, detail="Token invalido")
         else:  
-            raise HTTPException(status_code=401, detail="")
-    # 5. si no hay nada válido, lanzar HTTPException 401
+            raise HTTPException(status_code=401, detail="No autenticado. Credenciales no proporcionadas")
+
 
 @app.get("/prueba")
 def prueba(usuario: User = Depends(get_usuario_actual)):
     return {"id": usuario.id, "email": usuario.email}
+
+@app.post("/logout")
+def logout(request:Request, response: Response, db: Session=Depends(get_db)):
+    cookie=request.cookies.get("session_id")
+    if cookie:
+        user_session=db.query(UserSession).filter(UserSession.id==cookie).first()
+        response.delete_cookie(key="session_id")
+        if user_session:
+            db.delete(user_session)
+            db.commit()
+    return {"message":"Logout exitoso"}
+
+
+def requerir_rol(rol: str):
+    def verificar( usuario: User= Depends(get_usuario_actual), db: Session=Depends(get_db)):
+        rol_existente=db.query(Rol).filter(Rol.id==usuario.rol_id).first()
+        if not rol_existente.descripcion== rol:
+            raise HTTPException(status_code=403, detail="Sin permiso para esta acción")
+        return usuario
+    return verificar
+
+
+@app.get("/admin/login_attempts", response_model=list[LoginAttemptResponse])
+def login_attempts(usuario: User = Depends(requerir_rol("admin")), db: Session= Depends(get_db)):
+    db_login_attempts=db.query(LoginAttempt).all()
+    return db_login_attempts
