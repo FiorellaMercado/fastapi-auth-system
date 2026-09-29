@@ -1,5 +1,6 @@
 from database import Base
 from sqlalchemy import Column, String, Integer, DateTime, Boolean, ForeignKey
+from datetime import datetime, timezone
 
 
 class Rol(Base):
@@ -24,8 +25,8 @@ class UserSession(Base):
     # cualquiera puede probar números consecutivos en la cookie y "entrar" como otro usuario 
     # sin necesidad de robar nada, solo adivinando.
     user_id=Column(Integer, ForeignKey("users.id", ondelete="CASCADE"))
-    created_at=Column(DateTime)
-    expires_at=Column(DateTime)
+    created_at=Column(DateTime(timezone=True), default=datetime.now(timezone.utc))
+    expires_at=Column(DateTime(timezone=True), nullable=False)
     csrf_token=Column(String)
 
 
@@ -38,4 +39,4 @@ class LoginAttempt(Base):
     email=Column(String)
     ip=Column(String)
     is_success=Column(Boolean)
-    created_at= Column(DateTime)
+    created_at= Column(DateTime(timezone=True), default=datetime.now(timezone.utc), index=True)
