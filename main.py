@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, HTTPException, Request,status, Response
+from fastapi import FastAPI, Depends, HTTPException, Request,status, Response, Header
 from database import Base, engine, get_db,SessionLocal
 from sqlalchemy.orm import Session
 from seed import sembrar_datos_iniciales
@@ -129,20 +129,40 @@ def get_usuario_actual(request: Request, db: Session = Depends(get_db),
         else:  
             raise HTTPException(status_code=401, detail="No autenticado. Credenciales no proporcionadas")
 
+def validar_csrf(request:Request, db: Session=Depends(get_db)):
+    cookie=request.cookies.get("session_id")
+    if not cookie:
+        if request.headers.get("Authorization"):
+            return
+        raise HTTPException(status_code=401, detail="No autenticado")
+    if cookie: 
+        sesion_cookie=db.query(UserSession).filter(UserSession.id==cookie).first()
+        if sesion_cookie:
+            header_csrf_token=request.headers.get("X-CSRF-Token")
+            if sesion_cookie.csrf_token==header_csrf_token:
+                return 
+            else:
+                raise HTTPException(status_code=403, detail="Token csrf es invalido")
+        else:
+            raise HTTPException(status_code=401, detail="Sesion invalida")
 
 @app.get("/prueba")
 def prueba(usuario: User = Depends(get_usuario_actual)):
     return {"id": usuario.id, "email": usuario.email}
 
 @app.post("/logout")
-def logout(request:Request, response: Response, db: Session=Depends(get_db)):
+def logout(request:Request, response: Response, x_csrf_token: str = Header(None), db: Session=Depends(get_db), _: None = Depends(validar_csrf)):
     cookie=request.cookies.get("session_id")
-    if cookie:
-        user_session=db.query(UserSession).filter(UserSession.id==cookie).first()
-        response.delete_cookie(key="session_id")
-        if user_session:
-            db.delete(user_session)
-            db.commit()
+    if not cookie:
+        # sesión JWT: no hay nada que cerrar en el servidor
+        return {"message": "Sesión con JWT: no hay sesión en el servidor. El cliente debe descartar el token."}
+        
+    user_session=db.query(UserSession).filter(UserSession.id==cookie).first()
+    response.delete_cookie(key="session_id", httponly=True, secure=True, samesite="Lax")
+    if user_session:
+        db.delete(user_session)
+        db.commit()
+    
     return {"message":"Logout exitoso"}
 
 
