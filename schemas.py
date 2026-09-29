@@ -6,7 +6,7 @@ PATRON_NOMBRE = re.compile(r"[A-Za-zÁÉÍÓÚÜÑáéíóúüñ' -]+")
 
 class UserCreate(BaseModel):
     email: EmailStr
-    password: str
+    password: str = Field(min_length=8, max_length=72)
     nombre: str = Field(min_length=2, max_length=70)
     apellido: str = Field(min_length=2, max_length=70)
     @field_validator('nombre', 'apellido', mode="before")
