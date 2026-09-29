@@ -17,6 +17,7 @@ class UserResponse(BaseModel):
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str
+    modo: str
 
 class LoginAttemptResponse(BaseModel):
     email: EmailStr
