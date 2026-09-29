@@ -48,11 +48,17 @@ def login(usuario: LoginRequest, request:Request, response: Response, db: Sessio
 
     exito=False
     usuario_normalizado=usuario.email.lower()
-    usuario_existente=db.query(User).filter(User.email==usuario_normalizado).first()
-    if usuario_existente:
-        if verificar_password(usuario.password, usuario_existente.password):
-            exito=True
 
+    intentos_fallidos=db.query(LoginAttempt).filter(LoginAttempt.email==usuario_normalizado,
+        LoginAttempt.created_at>(datetime.now(timezone.utc)-timedelta(minutes=15)),
+        LoginAttempt.is_success==False).count()
+
+    if intentos_fallidos<5:
+        usuario_existente=db.query(User).filter(User.email==usuario_normalizado).first()
+        if usuario_existente:
+            if verificar_password(usuario.password, usuario_existente.password):
+                exito=True
+    
     ahora = datetime.now(timezone.utc)
 
     #guardar el intento exito o fallido a la tabla LoginAttempt
@@ -60,6 +66,9 @@ def login(usuario: LoginRequest, request:Request, response: Response, db: Sessio
     created_at=ahora)
     db.add(nuevo_login_attempt)
     db.commit()
+
+    if intentos_fallidos>=5:
+        raise HTTPException(status_code=429,detail="Demasiados intentos fallidos. Intenta más tarde")
 
     if not exito:
         raise HTTPException(status_code=401, detail= "Usuario o contrase;a invalidos")
@@ -150,3 +159,6 @@ def requerir_rol(rol: str):
 def login_attempts(usuario: User = Depends(requerir_rol("admin")), db: Session= Depends(get_db)):
     db_login_attempts=db.query(LoginAttempt).all()
     return db_login_attempts
+
+
+
