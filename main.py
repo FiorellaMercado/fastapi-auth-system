@@ -130,10 +130,11 @@ def get_usuario_actual(request: Request, db: Session = Depends(get_db),
             raise HTTPException(status_code=401, detail="No autenticado. Credenciales no proporcionadas")
 
 def validar_csrf(request:Request, db: Session=Depends(get_db),
-             x_csrf_token: str | None = Header(None, alias="X-CSRF-Token")):
+             x_csrf_token: str | None = Header(None, alias="X-CSRF-Token"),
+             credenciales: HTTPAuthorizationCredentials = Depends(security_scheme)):
     cookie=request.cookies.get("session_id")
     if not cookie:
-        if request.headers.get("Authorization"):
+        if credenciales:
             return
         raise HTTPException(status_code=401, detail="No autenticado")
     if cookie: 
