@@ -182,4 +182,12 @@ def login_attempts(usuario: User = Depends(requerir_rol("admin")), db: Session= 
     return db_login_attempts
 
 
+@app.delete("/admin/eliminar_usuario/{id}")
+def eliminar_usuario(id:int, db:Session=Depends(get_db), usuario: User = Depends(requerir_rol("admin")),_:None=Depends(validar_csrf)):
+    usuario_existente=db.query(User).filter(User.id==id).first()
+    if not usuario_existente:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
 
+    db.delete(usuario_existente)
+    db.commit()
+    return {"message": "Usuario eliminado correctamente"}
